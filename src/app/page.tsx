@@ -65,7 +65,7 @@ export default function Home() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
             </svg>
           </div>
-          <span className="font-[family-name:var(--font-dm-serif)] text-xl tracking-tight text-[#e2e8f0]">
+          <span className="font-['DM_Serif_Display',serif] text-xl tracking-tight text-[#e2e8f0]">
             SecureDoc Portal
           </span>
         </div>
@@ -79,7 +79,7 @@ export default function Home() {
       <main className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-xl fade-in-delay">
           <div className="text-center mb-8">
-            <h1 className="font-[family-name:var(--font-dm-serif)] text-4xl mb-4 text-[#e2e8f0]">
+            <h1 className="font-['DM_Serif_Display',serif] text-4xl mb-4 text-[#e2e8f0]">
               Secure Document Sharing
             </h1>
             <p className="text-[#94a3b8] text-lg">

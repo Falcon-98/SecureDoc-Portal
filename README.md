@@ -38,7 +38,12 @@ Set these GitHub repository secrets to enable deployment:
 - `VERCEL_TOKEN`
 - `VERCEL_ORG_ID`
 - `VERCEL_PROJECT_ID`
-- `NEXT_PUBLIC_BASE_URL` (in Vercel project environment variables, set to your deployed app URL)
+
+If these secrets are missing, the deploy job fails early with a clear error.
+
+Set this Vercel project environment variable:
+
+- `NEXT_PUBLIC_BASE_URL` (set to your deployed app URL)
 
 You can also deploy manually with:
 

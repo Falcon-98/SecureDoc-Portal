@@ -1,6 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { db } from '@/lib/firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { encryptUrl, encryptedToBase64 } from '@/lib/encryption';
+import { v4 as uuidv4 } from 'uuid';
 
 export default function Home() {
   const [documentUrl, setDocumentUrl] = useState('');
@@ -18,25 +22,35 @@ export default function Home() {
     setResult(null);
 
     try {
-      const response = await fetch('/api/create-doc', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          documentUrl,
-          title: title || 'Confidential Document',
-          owner: owner || 'Anonymous',
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to create secure document');
+      // Validate URL format
+      try {
+        new URL(documentUrl);
+      } catch {
+        throw new Error('Invalid URL format');
       }
 
-      setResult({ url: data.url, docId: data.docId });
+      // Generate a unique ID for the document
+      const docId = uuidv4().slice(0, 8);
+
+      // Encrypt the document URL
+      const encryptedUrl = encryptUrl(documentUrl);
+      const encryptedBase64 = encryptedToBase64(encryptedUrl);
+
+      // Store in Firebase
+      await addDoc(collection(db, 'documents'), {
+        docId,
+        encryptedUrl: encryptedBase64,
+        title: title || 'Confidential Document',
+        owner: owner || 'Anonymous',
+        createdAt: serverTimestamp(),
+        accessCount: 0
+      });
+
+      // Generate the secure link
+      const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+      const newPageUrl = `${window.location.origin}${basePath}/doc/?id=${docId}`;
+
+      setResult({ url: newPageUrl, docId });
       setDocumentUrl('');
       setTitle('');
       setOwner('');

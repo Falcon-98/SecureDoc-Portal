@@ -6,10 +6,9 @@ interface DocumentViewerProps {
   documentUrl: string;
   title: string;
   owner: string;
-  docId: string;
 }
 
-export default function DocumentViewer({ documentUrl, title, owner, docId }: DocumentViewerProps) {
+export default function DocumentViewer({ documentUrl, title, owner }: DocumentViewerProps) {
   const shieldRef = useRef<HTMLDivElement>(null);
   const screenshotBlockRef = useRef<HTMLDivElement>(null);
 

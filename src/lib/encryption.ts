@@ -25,13 +25,13 @@ export function decryptUrl(encrypted: number[]): string {
  * Converts encrypted array to base64 for storage
  */
 export function encryptedToBase64(encrypted: number[]): string {
-  return Buffer.from(encrypted).toString('base64');
+  return btoa(String.fromCharCode(...encrypted));
 }
 
 /**
  * Converts base64 string back to encrypted array
  */
 export function base64ToEncrypted(base64: string): number[] {
-  const buffer = Buffer.from(base64, 'base64');
-  return Array.from(buffer);
+  const binary = atob(base64);
+  return Array.from(binary, (char) => char.charCodeAt(0));
 }

@@ -53,6 +53,8 @@ export async function saveDocument(data: {
   owner: string;
 }): Promise<{ success: boolean; useLocalStorage: boolean }> {
   // Try Firebase first with a timeout
+  let timeoutId: NodeJS.Timeout | undefined;
+  
   try {
     const firebasePromise = addDoc(collection(db, 'documents'), {
       docId: data.docId,
@@ -65,7 +67,7 @@ export async function saveDocument(data: {
 
     // Set a 10-second timeout for Firebase
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Firebase timeout')), 10000);
+      timeoutId = setTimeout(() => reject(new Error('Firebase timeout')), 10000);
     });
 
     await Promise.race([firebasePromise, timeoutPromise]);
@@ -90,6 +92,10 @@ export async function saveDocument(data: {
       console.error('localStorage save also failed:', localError);
       throw new Error('Failed to save document. Please try again.');
     }
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
   }
 }
 
@@ -98,16 +104,23 @@ export async function saveDocument(data: {
  */
 export async function getDocument(docId: string): Promise<StoredDocument | null> {
   // Try Firebase first with a timeout
+  let timeoutId: NodeJS.Timeout | undefined;
+  
   try {
     const documentsRef = collection(db, 'documents');
     const q = query(documentsRef, where('docId', '==', docId));
     
     const firebasePromise = getDocs(q);
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Firebase timeout')), 10000);
+      timeoutId = setTimeout(() => reject(new Error('Firebase timeout')), 10000);
     });
 
     const querySnapshot = await Promise.race([firebasePromise, timeoutPromise]);
+    
+    // Clear the timeout since Firebase succeeded
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
 
     if (!querySnapshot.empty) {
       const docSnap = querySnapshot.docs[0];
@@ -128,26 +141,41 @@ export async function getDocument(docId: string): Promise<StoredDocument | null>
       };
     }
   } catch (error) {
+    // Clear the timeout on error
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
     console.warn('Firebase read failed, trying localStorage:', error);
   }
 
   // Fallback to localStorage
   try {
     const documents = getLocalDocuments();
-    const localDoc = documents.find(doc => doc.docId === docId);
+    const docIndex = documents.findIndex(doc => doc.docId === docId);
     
-    if (localDoc) {
-      // Update access count in localStorage
-      localDoc.accessCount = (localDoc.accessCount || 0) + 1;
-      saveLocalDocuments(documents);
+    if (docIndex !== -1) {
+      // Create updated document with incremented access count
+      const localDoc = documents[docIndex];
+      const updatedDoc = {
+        ...localDoc,
+        accessCount: (localDoc.accessCount || 0) + 1
+      };
+      
+      // Update the array with the new document and save
+      const updatedDocuments = [
+        ...documents.slice(0, docIndex),
+        updatedDoc,
+        ...documents.slice(docIndex + 1)
+      ];
+      saveLocalDocuments(updatedDocuments);
       
       return {
-        docId: localDoc.docId,
-        encryptedUrl: localDoc.encryptedUrl,
-        title: localDoc.title,
-        owner: localDoc.owner,
-        createdAt: new Date(localDoc.createdAt),
-        accessCount: localDoc.accessCount
+        docId: updatedDoc.docId,
+        encryptedUrl: updatedDoc.encryptedUrl,
+        title: updatedDoc.title,
+        owner: updatedDoc.owner,
+        createdAt: new Date(updatedDoc.createdAt),
+        accessCount: updatedDoc.accessCount
       };
     }
   } catch (localError) {

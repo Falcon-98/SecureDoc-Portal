@@ -33,7 +33,7 @@ This app uses Firebase Firestore for document storage. To enable cross-device sh
 
 In the Firebase Console, go to **Firestore Database → Rules** and set:
 
-```javascript
+```
 rules_version = '2';
 
 service cloud.firestore {

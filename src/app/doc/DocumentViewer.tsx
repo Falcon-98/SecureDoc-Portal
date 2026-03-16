@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import Link from 'next/link';
 
 interface DocumentViewerProps {
   documentUrl: string;
@@ -11,6 +12,28 @@ interface DocumentViewerProps {
 export default function DocumentViewer({ documentUrl, title, owner }: DocumentViewerProps) {
   const shieldRef = useRef<HTMLDivElement>(null);
   const screenshotBlockRef = useRef<HTMLDivElement>(null);
+  const viewerRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      viewerRef.current?.requestFullscreen?.();
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen?.();
+      setIsFullscreen(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
 
   useEffect(() => {
     // Generate watermarks
@@ -59,6 +82,16 @@ export default function DocumentViewer({ documentUrl, title, owner }: DocumentVi
     };
 
     const preventKeyboard = (e: KeyboardEvent) => {
+      // Allow fullscreen toggle with F11
+      if (e.key === 'F11') {
+        e.preventDefault();
+        toggleFullscreen();
+        return false;
+      }
+      // Escape to exit fullscreen
+      if (e.key === 'Escape' && isFullscreen) {
+        return; // Let the browser handle fullscreen exit
+      }
       // Ctrl/Cmd + C, X, V, A, S, P, U
       if ((e.ctrlKey || e.metaKey) && ['c', 'x', 'v', 'a', 's', 'p', 'u'].includes(e.key.toLowerCase())) {
         e.preventDefault();
@@ -128,17 +161,16 @@ export default function DocumentViewer({ documentUrl, title, owner }: DocumentVi
       window.removeEventListener('focus', handleFocus);
       clearTimeout(scrollTimeout);
     };
-  }, []);
+  }, [toggleFullscreen, isFullscreen]);
 
   const handleIframeLoad = () => {
     setTimeout(() => {
-      const loader = document.getElementById('loader');
-      loader?.classList.add('hidden');
+      setIsLoading(false);
     }, 800);
   };
 
   return (
-    <div className="relative z-10 min-h-screen flex flex-col no-select">
+    <div ref={viewerRef} className="relative z-10 min-h-screen flex flex-col no-select bg-[#0a0e17]">
       {/* Screenshot Block Overlay */}
       <div ref={screenshotBlockRef} className="screenshot-block" id="screenshotBlock">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-12 h-12 text-[#ef4444] mb-4">
@@ -149,46 +181,68 @@ export default function DocumentViewer({ documentUrl, title, owner }: DocumentVi
       </div>
 
       {/* Header */}
-      <header className="fade-in backdrop-blur-xl bg-[rgba(17,24,39,0.7)] border-b border-[rgba(59,130,246,0.12)] px-8 h-16 flex items-center justify-between sticky top-0 z-50">
+      <header className="fade-in backdrop-blur-xl bg-[rgba(17,24,39,0.7)] border-b border-[rgba(59,130,246,0.12)] px-4 sm:px-8 h-14 sm:h-16 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <div className="logo-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="white" className="w-5 h-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
-            </svg>
-          </div>
-          <span className="font-['DM_Serif_Display',serif] text-xl tracking-tight text-[#e2e8f0]">
-            SecureDoc Portal
-          </span>
+          <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+            <div className="logo-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="white" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
+              </svg>
+            </div>
+            <span className="font-['DM_Serif_Display',serif] text-lg sm:text-xl tracking-tight text-[#e2e8f0] hidden sm:inline">
+              SecureDoc Portal
+            </span>
+          </Link>
         </div>
-        <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold uppercase tracking-widest bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.25)] text-[#fca5a5]">
-          <div className="w-1.5 h-1.5 rounded-full bg-[#ef4444] badge-dot"></div>
-          Confidential
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Fullscreen Toggle */}
+          <button
+            onClick={toggleFullscreen}
+            className="p-2 rounded-lg text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-[rgba(59,130,246,0.1)] transition-all"
+            title={isFullscreen ? 'Exit fullscreen (F11)' : 'Enter fullscreen (F11)'}
+          >
+            {isFullscreen ? (
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9 3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5 5.25 5.25" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+              </svg>
+            )}
+          </button>
+          
+          <div className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full text-[10px] sm:text-xs font-semibold uppercase tracking-widest bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.25)] text-[#fca5a5]">
+            <div className="w-1.5 h-1.5 rounded-full bg-[#ef4444] badge-dot"></div>
+            <span className="hidden sm:inline">Confidential</span>
+          </div>
         </div>
       </header>
 
       {/* Info Bar */}
-      <div className="fade-in-delay bg-[rgba(26,34,54,0.6)] border-b border-[rgba(59,130,246,0.12)] px-8 py-3.5 flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-5 flex-wrap">
+      <div className="fade-in-delay bg-[rgba(26,34,54,0.6)] border-b border-[rgba(59,130,246,0.12)] px-4 sm:px-8 py-3 sm:py-3.5 flex items-center justify-between flex-wrap gap-2 sm:gap-3">
+        <div className="flex items-center gap-3 sm:gap-5 flex-wrap">
           <div className="flex items-center gap-1.5 text-xs text-[#94a3b8]">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5 opacity-60">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
             </svg>
-            <strong className="text-[#e2e8f0] font-medium">{title}</strong>
+            <strong className="text-[#e2e8f0] font-medium truncate max-w-[150px] sm:max-w-none">{title}</strong>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-[#94a3b8]">
+          <div className="hidden sm:flex items-center gap-1.5 text-xs text-[#94a3b8]">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5 opacity-60">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
             </svg>
             Owner: <strong className="text-[#e2e8f0] font-medium">{owner}</strong>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-[#94a3b8]">
+          <div className="hidden sm:flex items-center gap-1.5 text-xs text-[#94a3b8]">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5 opacity-60">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
             </svg>
             Access: <strong className="text-[#e2e8f0] font-medium">View Only</strong>
           </div>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="hidden md:flex gap-2 flex-wrap">
           <div className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-medium bg-[rgba(59,130,246,0.08)] border border-[rgba(59,130,246,0.15)] text-[#93c5fd]">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3 h-3">
               <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
@@ -211,8 +265,8 @@ export default function DocumentViewer({ documentUrl, title, owner }: DocumentVi
       </div>
 
       {/* Document Viewer */}
-      <div className="flex-1 p-6 fade-in-delay">
-        <div className="relative bg-[#1a2236] rounded-xl border border-[rgba(59,130,246,0.12)] overflow-hidden min-h-[75vh] shadow-[0_0_0_1px_rgba(59,130,246,0.05),0_20px_60px_rgba(0,0,0,0.3)]">
+      <div className={`flex-1 ${isFullscreen ? 'p-0' : 'p-4 sm:p-6'} fade-in-delay`}>
+        <div className={`relative bg-[#1a2236] ${isFullscreen ? 'rounded-none' : 'rounded-xl'} border ${isFullscreen ? 'border-transparent' : 'border-[rgba(59,130,246,0.12)]'} overflow-hidden ${isFullscreen ? 'h-full' : 'min-h-[75vh]'} shadow-[0_0_0_1px_rgba(59,130,246,0.05),0_20px_60px_rgba(0,0,0,0.3)]`}>
           {/* Watermark Layer */}
           <div id="watermarkLayer" className="watermark-layer"></div>
 
@@ -220,10 +274,12 @@ export default function DocumentViewer({ documentUrl, title, owner }: DocumentVi
           <div ref={shieldRef} className="iframe-shield"></div>
 
           {/* Loading */}
-          <div id="loader" className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#1a2236] transition-all duration-500">
-            <div className="spinner"></div>
-            <p className="mt-4 text-sm text-[#94a3b8]">Decrypting and loading secure document…</p>
-          </div>
+          {isLoading && (
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#1a2236] transition-all duration-500">
+              <div className="spinner"></div>
+              <p className="mt-4 text-sm text-[#94a3b8]">Decrypting and loading secure document…</p>
+            </div>
+          )}
 
           {/* Document iframe */}
           <iframe
@@ -231,21 +287,24 @@ export default function DocumentViewer({ documentUrl, title, owner }: DocumentVi
             sandbox="allow-scripts allow-same-origin"
             loading="lazy"
             onLoad={handleIframeLoad}
-            className="w-full h-full border-none absolute inset-0 min-h-[75vh]"
+            className={`w-full h-full border-none absolute inset-0 ${isFullscreen ? '' : 'min-h-[75vh]'}`}
+            title={title}
           />
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="px-8 py-4 border-t border-[rgba(59,130,246,0.12)] bg-[rgba(17,24,39,0.5)] flex items-center justify-between text-xs text-[#94a3b8]">
-        <div className="flex items-center gap-1.5">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="#22c55e" className="w-3 h-3">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
-          </svg>
-          End-to-end protected · AES-256 encrypted link
-        </div>
-        <span>© 2026 SecureDoc Portal. All rights reserved.</span>
-      </footer>
+      {/* Footer - hidden in fullscreen */}
+      {!isFullscreen && (
+        <footer className="px-4 sm:px-8 py-3 sm:py-4 border-t border-[rgba(59,130,246,0.12)] bg-[rgba(17,24,39,0.5)] flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-[#94a3b8]">
+          <div className="flex items-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="#22c55e" className="w-3 h-3">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
+            </svg>
+            <span>End-to-end protected · Encrypted link</span>
+          </div>
+          <span>© 2026 SecureDoc Portal. All rights reserved.</span>
+        </footer>
+      )}
     </div>
   );
 }

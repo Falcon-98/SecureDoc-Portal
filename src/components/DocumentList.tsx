@@ -37,9 +37,10 @@ function formatDate(date: Date | string): string {
 
 function getDocumentUrl(docId: string): string {
   if (typeof window !== 'undefined') {
-    return `${window.location.origin}/doc?id=${docId}`;
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+    return `${window.location.origin}${basePath}/doc/?id=${docId}`;
   }
-  return `/doc?id=${docId}`;
+  return `/doc/?id=${docId}`;
 }
 
 export function DocumentList({
@@ -55,7 +56,7 @@ export function DocumentList({
 
   const loadDocuments = useCallback(() => {
     try {
-      const stored = localStorage.getItem('securedoc-documents');
+      const stored = localStorage.getItem('securedoc_documents');
       if (stored) {
         const parsed: StoredDocument[] = JSON.parse(stored);
         const docs: DocumentItem[] = parsed.map((doc) => ({
@@ -107,11 +108,11 @@ export function DocumentList({
 
   const handleDelete = (docId: string) => {
     try {
-      const stored = localStorage.getItem('securedoc-documents');
+      const stored = localStorage.getItem('securedoc_documents');
       if (stored) {
         const parsed: StoredDocument[] = JSON.parse(stored);
         const filtered = parsed.filter((doc) => doc.docId !== docId);
-        localStorage.setItem('securedoc-documents', JSON.stringify(filtered));
+        localStorage.setItem('securedoc_documents', JSON.stringify(filtered));
         setDocuments((prev) => prev.filter((doc) => doc.docId !== docId));
       }
       setDeleteConfirmId(null);

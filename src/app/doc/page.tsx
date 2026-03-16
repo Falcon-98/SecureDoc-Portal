@@ -2,17 +2,10 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, updateDoc, increment } from 'firebase/firestore';
+import { getDocument } from '@/lib/storage';
 import { base64ToEncrypted, decryptUrl } from '@/lib/encryption';
 import DocumentViewer from './DocumentViewer';
 import NotFoundView from './NotFoundView';
-
-interface DocumentData {
-  encryptedUrl: string;
-  title: string;
-  owner: string;
-}
 
 function DocumentLoader() {
   const searchParams = useSearchParams();
@@ -26,32 +19,25 @@ function DocumentLoader() {
     }
 
     async function fetchDocument() {
+      // docId is guaranteed to be non-null here because of the early return above
+      const id = docId as string;
+      
       try {
-        const documentsRef = collection(db, 'documents');
-        const q = query(documentsRef, where('docId', '==', docId));
-        const querySnapshot = await getDocs(q);
+        const doc = await getDocument(id);
 
-        if (querySnapshot.empty) {
+        if (!doc) {
           setState('not-found');
           return;
         }
 
-        const docSnap = querySnapshot.docs[0];
-        const data = docSnap.data() as DocumentData;
-
-        // Update access count
-        await updateDoc(docSnap.ref, {
-          accessCount: increment(1)
-        });
-
         // Decrypt the URL client-side
-        const encrypted = base64ToEncrypted(data.encryptedUrl);
+        const encrypted = base64ToEncrypted(doc.encryptedUrl);
         const documentUrl = decryptUrl(encrypted);
 
         setDocumentData({
           url: documentUrl,
-          title: data.title,
-          owner: data.owner,
+          title: doc.title,
+          owner: doc.owner,
         });
         setState('found');
       } catch (error) {

@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { saveDocument } from '@/lib/storage';
 import { encryptUrl, encryptedToBase64 } from '@/lib/encryption';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -11,7 +10,7 @@ export default function Home() {
   const [title, setTitle] = useState('');
   const [owner, setOwner] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<{ url: string; docId: string } | null>(null);
+  const [result, setResult] = useState<{ url: string; docId: string; isLocal?: boolean } | null>(null);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
 
@@ -36,21 +35,19 @@ export default function Home() {
       const encryptedUrl = encryptUrl(documentUrl);
       const encryptedBase64 = encryptedToBase64(encryptedUrl);
 
-      // Store in Firebase
-      await addDoc(collection(db, 'documents'), {
+      // Store document using storage abstraction (Firebase with localStorage fallback)
+      const saveResult = await saveDocument({
         docId,
         encryptedUrl: encryptedBase64,
         title: title || 'Confidential Document',
-        owner: owner || 'Anonymous',
-        createdAt: serverTimestamp(),
-        accessCount: 0
+        owner: owner || 'Anonymous'
       });
 
       // Generate the secure link
       const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
       const newPageUrl = `${window.location.origin}${basePath}/doc/?id=${docId}`;
 
-      setResult({ url: newPageUrl, docId });
+      setResult({ url: newPageUrl, docId, isLocal: saveResult.useLocalStorage });
       setDocumentUrl('');
       setTitle('');
       setOwner('');
@@ -188,6 +185,11 @@ export default function Home() {
                   </svg>
                   Secure Link Generated!
                 </div>
+                {result.isLocal && (
+                  <div className="mb-3 p-2 bg-[rgba(250,204,21,0.1)] border border-[rgba(250,204,21,0.3)] rounded text-[#fef08a] text-xs">
+                    ⚠️ Using local storage (link works only on this device)
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <input
                     type="text"

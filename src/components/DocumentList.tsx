@@ -11,15 +11,11 @@ interface StoredDocument {
   accessCount: number;
 }
 
-interface LocalStorageDocument extends StoredDocument {
-  storageType: 'local';
-}
+type StorageType = 'local' | 'firebase';
 
-interface FirebaseDocument extends StoredDocument {
-  storageType: 'firebase';
+interface DocumentItem extends StoredDocument {
+  storageType: StorageType;
 }
-
-type DocumentItem = LocalStorageDocument | FirebaseDocument;
 
 interface DocumentListProps {
   onCopyLink?: (docId: string, url: string) => void;

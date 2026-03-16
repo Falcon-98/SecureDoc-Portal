@@ -12,8 +12,9 @@ interface QRCodeProps {
   showCopy?: boolean;
 }
 
-// QR Code generator using Reed-Solomon error correction
-// This is a simplified implementation that generates valid QR codes
+// QR-like visual pattern generator
+// NOTE: This generates decorative QR-like patterns based on input text.
+// For production use with actual scanning requirements, use a proper QR code library.
 function generateQRMatrix(text: string): boolean[][] {
   const size = 21; // Version 1 QR Code (21x21 modules)
   const matrix: boolean[][] = Array(size)
@@ -165,16 +166,21 @@ export function QRCode({
       canvas.height = size * 2;
 
       await new Promise<void>((resolve, reject) => {
+        const objectUrl = URL.createObjectURL(svgBlob);
         img.onload = () => {
           if (ctx) {
             ctx.fillStyle = bgColor === 'transparent' ? '#0a0e17' : bgColor;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
           }
+          URL.revokeObjectURL(objectUrl);
           resolve();
         };
-        img.onerror = reject;
-        img.src = URL.createObjectURL(svgBlob);
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error('Failed to load image'));
+        };
+        img.src = objectUrl;
       });
 
       const pngUrl = canvas.toDataURL('image/png');

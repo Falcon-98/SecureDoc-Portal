@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -24,8 +24,24 @@ export interface UseToastReturn {
 
 export function useToast(): UseToastReturn {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const timeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // Cleanup all timeouts on unmount
+  useEffect(() => {
+    const timeouts = timeoutsRef.current;
+    return () => {
+      timeouts.forEach((timeout) => clearTimeout(timeout));
+      timeouts.clear();
+    };
+  }, []);
 
   const removeToast = useCallback((id: string) => {
+    // Clear any existing timeout for this toast
+    const existingTimeout = timeoutsRef.current.get(id);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+      timeoutsRef.current.delete(id);
+    }
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
 
@@ -37,17 +53,22 @@ export function useToast(): UseToastReturn {
       setToasts((prev) => [...prev, newToast]);
 
       if (duration > 0) {
-        setTimeout(() => {
-          removeToast(id);
+        const timeout = setTimeout(() => {
+          timeoutsRef.current.delete(id);
+          setToasts((prev) => prev.filter((toast) => toast.id !== id));
         }, duration);
+        timeoutsRef.current.set(id, timeout);
       }
 
       return id;
     },
-    [removeToast]
+    []
   );
 
   const clearToasts = useCallback(() => {
+    // Clear all timeouts
+    timeoutsRef.current.forEach((timeout) => clearTimeout(timeout));
+    timeoutsRef.current.clear();
     setToasts([]);
   }, []);
 

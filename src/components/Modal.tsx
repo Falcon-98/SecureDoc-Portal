@@ -44,7 +44,9 @@ export function Modal({
   const previousActiveElement = useRef<Element | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Handle modal open/close state changes synchronously via layout effect
+  // Handle modal open/close state changes
+  // The 10ms delay is intentional to allow CSS transitions to trigger properly
+  // after the component mounts with initial opacity/transform values
   useIsomorphicLayoutEffect(() => {
     if (isOpen) {
       previousActiveElement.current = document.activeElement;

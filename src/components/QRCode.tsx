@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useMemo, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
+import QRCodeLib from 'qrcode';
 
 interface QRCodeProps {
   value: string;
@@ -12,126 +13,6 @@ interface QRCodeProps {
   showCopy?: boolean;
 }
 
-// QR-like visual pattern generator
-// NOTE: This generates decorative QR-like patterns based on input text.
-// For production use with actual scanning requirements, use a proper QR code library.
-function generateQRMatrix(text: string): boolean[][] {
-  const size = 21; // Version 1 QR Code (21x21 modules)
-  const matrix: boolean[][] = Array(size)
-    .fill(null)
-    .map(() => Array(size).fill(false));
-
-  // Add finder patterns (top-left, top-right, bottom-left)
-  const addFinderPattern = (row: number, col: number) => {
-    for (let r = 0; r < 7; r++) {
-      for (let c = 0; c < 7; c++) {
-        const isOuter = r === 0 || r === 6 || c === 0 || c === 6;
-        const isInner = r >= 2 && r <= 4 && c >= 2 && c <= 4;
-        if (row + r < size && col + c < size) {
-          matrix[row + r][col + c] = isOuter || isInner;
-        }
-      }
-    }
-  };
-
-  addFinderPattern(0, 0);
-  addFinderPattern(0, size - 7);
-  addFinderPattern(size - 7, 0);
-
-  // Add timing patterns
-  for (let i = 8; i < size - 8; i++) {
-    matrix[6][i] = i % 2 === 0;
-    matrix[i][6] = i % 2 === 0;
-  }
-
-  // Add separators (white space around finder patterns)
-  const addSeparator = (row: number, col: number, horizontal: boolean, length: number) => {
-    for (let i = 0; i < length; i++) {
-      if (horizontal) {
-        if (row < size && col + i < size && col + i >= 0) {
-          matrix[row][col + i] = false;
-        }
-      } else {
-        if (row + i < size && row + i >= 0 && col < size) {
-          matrix[row + i][col] = false;
-        }
-      }
-    }
-  };
-
-  addSeparator(7, 0, true, 8);
-  addSeparator(0, 7, false, 8);
-  addSeparator(7, size - 8, true, 8);
-  addSeparator(0, size - 8, false, 8);
-  addSeparator(size - 8, 0, true, 8);
-  addSeparator(size - 8, 7, false, 8);
-
-  // Dark module (always black)
-  matrix[size - 8][8] = true;
-
-  // Generate data from input text using simple hash-based pattern
-  const hashCode = (str: string): number => {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash;
-    }
-    return Math.abs(hash);
-  };
-
-  const hash = hashCode(text);
-  const dataBytes: number[] = [];
-
-  // Convert text to bytes for pattern generation
-  for (let i = 0; i < text.length; i++) {
-    dataBytes.push(text.charCodeAt(i));
-  }
-
-  // Fill data area with pattern based on input
-  let byteIndex = 0;
-  let bitIndex = 0;
-
-  const isReserved = (r: number, c: number): boolean => {
-    // Finder patterns
-    if (r < 9 && c < 9) return true;
-    if (r < 9 && c > size - 9) return true;
-    if (r > size - 9 && c < 9) return true;
-    // Timing patterns
-    if (r === 6 || c === 6) return true;
-    return false;
-  };
-
-  // Fill remaining area with data pattern
-  for (let col = size - 1; col >= 0; col -= 2) {
-    if (col === 6) col = 5; // Skip timing column
-
-    for (let row = 0; row < size; row++) {
-      for (let i = 0; i < 2; i++) {
-        const c = col - i;
-        if (c >= 0 && !isReserved(row, c)) {
-          // Use hash and data bytes to create pattern
-          const dataValue =
-            byteIndex < dataBytes.length
-              ? dataBytes[byteIndex]
-              : (hash >> (bitIndex % 32)) & 0xff;
-
-          const bit = (dataValue >> (7 - (bitIndex % 8))) & 1;
-
-          // Apply mask pattern (XOR with checkerboard)
-          const masked = bit ^ ((row + c) % 2 === 0 ? 1 : 0);
-          matrix[row][c] = masked === 1;
-
-          bitIndex++;
-          if (bitIndex % 8 === 0) byteIndex++;
-        }
-      }
-    }
-  }
-
-  return matrix;
-}
-
 export function QRCode({
   value,
   size = 200,
@@ -141,63 +22,65 @@ export function QRCode({
   showDownload = true,
   showCopy = true,
 }: QRCodeProps) {
-  const svgRef = useRef<SVGSVGElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [copied, setCopied] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const matrix = useMemo(() => generateQRMatrix(value), [value]);
-  const moduleCount = matrix.length;
-  const moduleSize = size / moduleCount;
+  // Generate QR code when value changes
+  useEffect(() => {
+    const generateQR = async () => {
+      if (!canvasRef.current || !value) return;
+      
+      try {
+        setError(null);
+        await QRCodeLib.toCanvas(canvasRef.current, value, {
+          width: size,
+          margin: 2,
+          color: {
+            dark: fgColor,
+            light: bgColor === 'transparent' ? '#00000000' : bgColor,
+          },
+          errorCorrectionLevel: 'M',
+        });
+      } catch (err) {
+        console.error('Failed to generate QR code:', err);
+        setError('Failed to generate QR code');
+      }
+    };
+
+    generateQR();
+  }, [value, size, bgColor, fgColor]);
 
   const handleDownload = useCallback(async () => {
-    if (!svgRef.current) return;
+    if (!canvasRef.current) return;
 
     setDownloading(true);
     try {
-      const svgData = new XMLSerializer().serializeToString(svgRef.current);
-      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-
-      // Create canvas to convert to PNG
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      const img = new Image();
-
-      canvas.width = size * 2;
-      canvas.height = size * 2;
-
-      await new Promise<void>((resolve, reject) => {
-        const objectUrl = URL.createObjectURL(svgBlob);
-        img.onload = () => {
-          if (ctx) {
-            ctx.fillStyle = bgColor === 'transparent' ? '#0a0e17' : bgColor;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          }
-          URL.revokeObjectURL(objectUrl);
-          resolve();
-        };
-        img.onerror = () => {
-          URL.revokeObjectURL(objectUrl);
-          reject(new Error('Failed to load image'));
-        };
-        img.src = objectUrl;
-      });
-
-      const pngUrl = canvas.toDataURL('image/png');
+      // Generate a data URL with proper background for download
+      const downloadCanvas = document.createElement('canvas');
+      const ctx = downloadCanvas.getContext('2d');
+      const padding = 32;
+      
+      downloadCanvas.width = size + padding * 2;
+      downloadCanvas.height = size + padding * 2;
+      
+      if (ctx) {
+        // Fill with background color
+        ctx.fillStyle = bgColor === 'transparent' ? '#0a0e17' : bgColor;
+        ctx.fillRect(0, 0, downloadCanvas.width, downloadCanvas.height);
+        
+        // Draw the QR code centered
+        ctx.drawImage(canvasRef.current, padding, padding, size, size);
+      }
+      
+      const pngUrl = downloadCanvas.toDataURL('image/png');
       const link = document.createElement('a');
       link.download = `qrcode-${Date.now()}.png`;
       link.href = pngUrl;
       link.click();
-    } catch {
-      // Fallback: download as SVG
-      const svgData = new XMLSerializer().serializeToString(svgRef.current);
-      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-      const url = URL.createObjectURL(svgBlob);
-      const link = document.createElement('a');
-      link.download = `qrcode-${Date.now()}.svg`;
-      link.href = url;
-      link.click();
-      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Download failed:', err);
     }
     setDownloading(false);
   }, [size, bgColor]);
@@ -208,52 +91,48 @@ export function QRCode({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback for older browsers
-      const textarea = document.createElement('textarea');
-      textarea.value = value;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      // Modern clipboard API not available - show message to user
+      console.warn('Clipboard API not available');
+      // Try fallback
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = value;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const success = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        if (success) {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        }
+      } catch {
+        // Both methods failed
+        console.error('Failed to copy to clipboard');
+      }
     }
   }, [value]);
 
   return (
     <div className={`inline-flex flex-col items-center gap-3 ${className}`}>
       <div
-        className="p-4 rounded-xl bg-white/5 border border-[var(--border)]"
+        className="p-4 rounded-xl bg-white/5 border border-[var(--border)] flex items-center justify-center"
         style={{ width: size + 32, height: size + 32 }}
       >
-        <svg
-          ref={svgRef}
-          width={size}
-          height={size}
-          viewBox={`0 0 ${size} ${size}`}
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          {bgColor !== 'transparent' && (
-            <rect x="0" y="0" width={size} height={size} fill={bgColor} />
-          )}
-          {matrix.map((row, rowIndex) =>
-            row.map((cell, colIndex) =>
-              cell ? (
-                <rect
-                  key={`${rowIndex}-${colIndex}`}
-                  x={colIndex * moduleSize}
-                  y={rowIndex * moduleSize}
-                  width={moduleSize}
-                  height={moduleSize}
-                  fill={fgColor}
-                  rx={moduleSize * 0.1}
-                />
-              ) : null
-            )
-          )}
-        </svg>
+        {error ? (
+          <div className="text-red-400 text-sm text-center p-4">
+            {error}
+          </div>
+        ) : (
+          <canvas
+            ref={canvasRef}
+            width={size}
+            height={size}
+            style={{ width: size, height: size }}
+          />
+        )}
       </div>
 
       {(showDownload || showCopy) && (
@@ -296,7 +175,7 @@ export function QRCode({
           {showDownload && (
             <button
               onClick={handleDownload}
-              disabled={downloading}
+              disabled={downloading || !!error}
               className="
                 flex items-center gap-2 px-3 py-2 rounded-lg
                 bg-[var(--accent)] text-white

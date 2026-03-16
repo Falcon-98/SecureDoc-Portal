@@ -91,18 +91,26 @@ export function DocumentList({
       setTimeout(() => setCopiedId(null), 2000);
       onCopyLink?.(doc.docId, url);
     } catch {
-      // Fallback
-      const textarea = document.createElement('textarea');
-      textarea.value = url;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-      setCopiedId(doc.docId);
-      setTimeout(() => setCopiedId(null), 2000);
-      onCopyLink?.(doc.docId, url);
+      // Fallback for older browsers
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = url;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const success = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        if (success) {
+          setCopiedId(doc.docId);
+          setTimeout(() => setCopiedId(null), 2000);
+          onCopyLink?.(doc.docId, url);
+        }
+      } catch {
+        // Both methods failed - silent fail
+        console.error('Failed to copy to clipboard');
+      }
     }
   };
 

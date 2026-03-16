@@ -47,7 +47,10 @@ export function useToast(): UseToastReturn {
 
   const addToast = useCallback(
     (message: string, type: ToastType, duration = 5000): string => {
-      const id = `toast-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      // Use crypto.randomUUID if available, fallback to Date.now + random
+      const id = typeof crypto !== 'undefined' && crypto.randomUUID 
+        ? `toast-${crypto.randomUUID()}`
+        : `toast-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
       const newToast: Toast = { id, message, type, duration };
 
       setToasts((prev) => [...prev, newToast]);

@@ -45,14 +45,20 @@ export function Modal({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Handle modal open/close state changes
-  // The 10ms delay is intentional to allow CSS transitions to trigger properly
-  // after the component mounts with initial opacity/transform values
+  // Small delays are used to ensure CSS transitions work correctly:
+  // - 10ms opening delay: allows the component to mount with initial styles before transitioning
+  // - 300ms closing delay: matches the CSS transition duration for smooth exit animation
   useIsomorphicLayoutEffect(() => {
     if (isOpen) {
       previousActiveElement.current = document.activeElement;
       setIsAnimating(true);
       document.body.style.overflow = 'hidden';
-      timerRef.current = setTimeout(() => setIsVisible(true), 10);
+      // Use requestAnimationFrame for more reliable transition triggering
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setIsVisible(true);
+        });
+      });
     } else {
       setIsVisible(false);
       timerRef.current = setTimeout(() => {
